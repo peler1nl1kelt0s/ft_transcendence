@@ -1,0 +1,58 @@
+services:
+  db:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: transcendence
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    networks:
+      - mynetwork
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+
+  django:
+    build: ./backend/backend
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./backend/backend:/code
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/transcendence
+    networks:
+      - mynetwork
+
+  nginx:
+    image: nginx:latest
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+      - ./frontend/nginx.conf:/etc/nginx/nginx.conf
+      - ./frontend/localhost.key:/etc/ssl/private/localhost.key
+      - ./frontend/localhost.pem:/etc/ssl/certs/localhost.pem
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - mynetwork
+    depends_on:
+      - django
+
+  redis:
+    image: redis:alpine
+    container_name: redis_server
+    command: ["redis-server", "--save", "300 10", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    networks:
+      - mynetwork
+
+
+networks:
+  mynetwork:
+    driver: bridge
